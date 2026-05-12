@@ -145,6 +145,7 @@ function init(selector, options = {}) {
   ctx = canvas.getContext('2d');
   ctx.imageSmoothingEnabled = false;  // avgörande – aldrig suddig pixelkonst
 
+  frameCount = 0;  // måste initieras innan första render-anropet
   setupInput();
   initHiscores();
   initAttractBricks();
