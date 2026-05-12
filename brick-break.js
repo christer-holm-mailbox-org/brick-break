@@ -120,6 +120,8 @@ let shipTimer, speedTimer, frameCount, pauseTimer, ballLaunch;
 // Input
 let keys, spaceConsumed;
 let keydownHandler, keyupHandler;
+let mouseMoveHandler, mouseLeaveHandler, mouseClickHandler;
+let mouseX = null;  // null = ingen aktiv musinput, annars logisk x-koordinat
 
 // Attract-animationer
 let attractBricks;  // fallande brickor på titelskärmen
@@ -158,7 +160,12 @@ function destroy() {
   if (animFrameId !== null) cancelAnimationFrame(animFrameId);
   document.removeEventListener('keydown', keydownHandler);
   document.removeEventListener('keyup',   keyupHandler);
-  if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
+  if (canvas) {
+    canvas.removeEventListener('mousemove',  mouseMoveHandler);
+    canvas.removeEventListener('mouseleave', mouseLeaveHandler);
+    canvas.removeEventListener('click',      mouseClickHandler);
+    if (canvas.parentNode) canvas.parentNode.removeChild(canvas);
+  }
   canvas = ctx = animFrameId = null;
 }
 
@@ -190,6 +197,29 @@ function setupInput() {
 
   document.addEventListener('keydown', keydownHandler);
   document.addEventListener('keyup',   keyupHandler);
+
+  // Mus: paddeln följer muspekarens x-position direkt
+  mouseMoveHandler = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    mouseX = (e.clientX - rect.left) * (W / rect.width);  // skalkonvertering CSS→logisk
+  };
+
+  // När musen lämnar canvas – återgå till tangentbordsstyrning
+  mouseLeaveHandler = () => { mouseX = null; };
+
+  // Klick: starta boll eller spel (motsvarar SPACE)
+  mouseClickHandler = (e) => {
+    e.stopPropagation();  // förhindrar att expand-klick triggas av spelet
+    if (state === 'ATTRACT_TITLE' || state === 'ATTRACT_HISCORE' || isDemoMode) {
+      startRealGame(); return;
+    }
+    if (state === 'GAME_OVER') { startAttractTitle(); return; }
+    if (state === 'PLAYING' && ballLaunch) ballLaunch = false;
+  };
+
+  canvas.addEventListener('mousemove',  mouseMoveHandler);
+  canvas.addEventListener('mouseleave', mouseLeaveHandler);
+  canvas.addEventListener('click',      mouseClickHandler);
 }
 
 // ── Hiscore ───────────────────────────────────────────────────────────────────
@@ -442,11 +472,18 @@ function update(dt) {
 // ── Paddel ────────────────────────────────────────────────────────────────────
 
 function updatePaddle() {
-  if (keys.left)  paddle.vx -= 2.5;
-  if (keys.right) paddle.vx += 2.5;
-  paddle.vx *= 0.78;
-  paddle.x  += paddle.vx;
-  paddle.x   = Math.max(0, Math.min(W - paddle.width, paddle.x));
+  if (mouseX !== null) {
+    // Mus: paddeln centreras direkt på muspekarens logiska x-position
+    paddle.x  = Math.max(0, Math.min(W - paddle.width, mouseX - paddle.width / 2));
+    paddle.vx = 0;
+  } else {
+    // Tangentbord: acceleration + friktion
+    if (keys.left)  paddle.vx -= 2.5;
+    if (keys.right) paddle.vx += 2.5;
+    paddle.vx *= 0.78;
+    paddle.x  += paddle.vx;
+    paddle.x   = Math.max(0, Math.min(W - paddle.width, paddle.x));
+  }
 }
 
 // AI-styrning: mjuk följning av bollen med lite slumpvariation
