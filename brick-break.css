@@ -105,4 +105,5 @@
 .bb-window.expanded #game canvas {
   width: 480px;
   height: 640px;
+  cursor: none;
 }
