@@ -51,4 +51,13 @@ export const META_CONFIG = {
 
   /** Spelversion – visas i konsolloggen vid start */
   version: '0.1.0',
+
+  /** Sekunder som titelskärmen visas i attract-läget */
+  attractTitleTime: 6,
+
+  /** Sekunder som demo-spelet körs i attract-läget */
+  attractDemoTime: 14,
+
+  /** Sekunder som hiscoreskärmen visas i attract-läget */
+  attractHiscoreTime: 5,
 };

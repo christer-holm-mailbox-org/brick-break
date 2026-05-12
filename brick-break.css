@@ -1,26 +1,108 @@
 /**
  * brick-break.css – Styling för Brick Break
  *
- * Kanvasen skalas 2× via CSS vilket ger äkta "stor pixel"-känsla.
- * image-rendering: pixelated förhindrar webbläsarens utjämning (anti-aliasing).
+ * Flytande spelfönster som monteras i övre höger hörnet av webbsidan.
+ * Fönstret har ett mini-läge (litet, klickbart) och ett expanded-läge (fullt).
+ * Canvas skalas via CSS – image-rendering: pixelated ger äkta pixelkonst.
  */
 
-/* Importera pixelkonst-typsnittet från Google Fonts */
 @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
 
-/* Container för hela spelmodulen */
-.brick-break-container {
-  display: inline-block;
-  line-height: 0; /* tar bort extra utrymme under canvas */
+/* ── Flytande fönster ─────────────────────────────────────────────────────── */
+
+.bb-window {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 9999;
+  background: #0a0a1a;
+  border: 2px solid #1a1a3a;
+  box-shadow: 0 0 24px rgba(0, 170, 255, 0.15);
+  overflow: hidden;
+  /* Transition på bredd/höjd skapar "curtain expand"-effekten */
+  transition:
+    width  0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    height 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.3s ease;
 }
 
-/* Kanvasen – skalas upp 2× med pixelrendering */
-.brick-break-container canvas {
-  width: 480px;   /* CSS-storlek = dubbla den logiska upplösningen */
-  height: 640px;
-  image-rendering: pixelated;       /* Chrome, Edge, Opera */
-  image-rendering: crisp-edges;     /* Firefox */
-  border: 2px solid #1a1a3a;
-  box-shadow: 0 0 20px rgba(0, 170, 255, 0.2);
+/* ── Mini-läge: litet fönster uppe till höger ─────────────────────────────── */
+.bb-window.mini {
+  width: 164px;   /* 160px canvas + 2×2px border */
+  height: 234px;  /* 20px header + 214px canvas */
+  cursor: pointer;
+}
+
+.bb-window.mini:hover {
+  box-shadow: 0 0 36px rgba(0, 170, 255, 0.4);
+  border-color: #2a2a6a;
+}
+
+/* ── Expanded-läge: fullt spelfönster ────────────────────────────────────── */
+.bb-window.expanded {
+  width: 484px;   /* 480px canvas + 2×2px border */
+  height: 660px;  /* 20px header + 640px canvas */
+  cursor: default;
+}
+
+/* ── Titelrad ─────────────────────────────────────────────────────────────── */
+.bb-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 20px;
+  padding: 0 7px;
+  background: #07071a;
+  border-bottom: 1px solid #1a1a3a;
+  font-family: 'Press Start 2P', monospace;
+}
+
+.bb-title {
+  font-size: 6px;
+  color: #4ac8ff;
+  letter-spacing: 1px;
+  user-select: none;
+}
+
+.bb-btn-toggle {
+  background: none;
+  border: 1px solid #2a2a5a;
+  color: #4ac8ff;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  line-height: 1;
+  padding: 1px 4px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.bb-btn-toggle:hover {
+  background: #1a1a4a;
+  color: #ffffff;
+}
+
+/* ── Canvas ────────────────────────────────────────────────────────────────── */
+#game {
   display: block;
+  line-height: 0;
+}
+
+#game canvas {
+  display: block;
+  image-rendering: pixelated;      /* Chrome, Edge, Opera */
+  image-rendering: crisp-edges;    /* Firefox */
+  /* Storlekstransition – animerar mini ↔ expanded */
+  transition:
+    width  0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.bb-window.mini #game canvas {
+  width: 160px;
+  height: 214px;   /* 160 × 4/3 ≈ 213, avrundat till 214 */
+}
+
+.bb-window.expanded #game canvas {
+  width: 480px;
+  height: 640px;
 }

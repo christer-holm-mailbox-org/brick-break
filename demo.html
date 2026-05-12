@@ -3,58 +3,143 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Brick Break – Demo</title>
+  <title>Brick Break</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="brick-break.css">
   <style>
-    /* ── Demosida-layout ────────────────────────────────────────────────── */
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
       background: #0a0a0f;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
+      color: #888899;
+      font-family: Arial, sans-serif;
+      font-size: 15px;
+      line-height: 1.7;
       min-height: 100vh;
+      padding: 48px 56px;
+    }
+
+    /* ── Sidhuvud ── */
+    .site-header {
       font-family: 'Press Start 2P', monospace;
-      gap: 16px;
-      padding: 24px;
-    }
-
-    h1 {
-      font-size: 16px;
+      font-size: 10px;
       color: #ffffff;
-      letter-spacing: 4px;
+      margin-bottom: 48px;
+      letter-spacing: 2px;
     }
 
-    #game {
-      /* Responsiv skalning: aldrig bredare än skärmen */
-      max-width: 100%;
+    .site-header span {
+      color: #4ac8ff;
     }
 
-    .instructions {
+    /* ── Innehåll ── */
+    .hero h1 {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 14px;
+      color: #ffffff;
+      margin-bottom: 16px;
+      line-height: 1.6;
+    }
+
+    .hero p {
+      max-width: 480px;
+      margin-bottom: 12px;
+      color: #666677;
+    }
+
+    .section {
+      margin-top: 48px;
+      max-width: 560px;
+    }
+
+    .section h2 {
+      font-family: 'Press Start 2P', monospace;
       font-size: 8px;
-      color: #555566;
-      text-align: center;
-      line-height: 1.8;
+      color: #4ac8ff;
+      margin-bottom: 12px;
+      letter-spacing: 1px;
     }
+
+    .section p {
+      color: #555566;
+      margin-bottom: 8px;
+    }
+
+    .key-hint {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 6px;
+      color: #333344;
+      margin-top: 24px;
+      line-height: 2;
+    }
+
+    /* Brickor som visuell dekoration */
+    .deco-row {
+      display: flex;
+      gap: 4px;
+      margin: 32px 0;
+    }
+
+    .deco-brick {
+      height: 12px;
+      width: 56px;
+      border-top: 2px solid;
+      border-left: 2px solid;
+      border-right: 2px solid;
+      border-bottom: 2px solid;
+    }
+
+    .deco-brick:nth-child(1) { background: #6b0000; border-color: #e74c3c #3a0000 #3a0000 #e74c3c; }
+    .deco-brick:nth-child(2) { background: #6b2800; border-color: #e67e22 #3a1500 #3a1500 #e67e22; }
+    .deco-brick:nth-child(3) { background: #6b5a00; border-color: #f1c40f #3a3000 #3a3000 #f1c40f; }
+    .deco-brick:nth-child(4) { background: #0a3d1a; border-color: #27ae60 #051a0d #051a0d #27ae60; }
+    .deco-brick:nth-child(5) { background: #0a2050; border-color: #3498db #050f28 #050f28 #3498db; }
   </style>
 </head>
 <body>
-  <h1>BRICK BREAK</h1>
 
-  <!-- Spelet mountas här av BrickBreak.init -->
-  <div id="game"></div>
+  <header class="site-header">
+    ARCADE<span>ZONE</span>
+  </header>
 
-  <p class="instructions">
-    ← → FLYTTA &nbsp;&nbsp; SPACE STARTA / SKJUT
-  </p>
+  <main>
+    <section class="hero">
+      <h1>RETRO-SPEL<br>I DIN WEBBLÄSARE</h1>
+      <p>Klassiska arkadspel byggda i vanilla JavaScript med äkta pixelkonst-estetik.
+         Inga plugins. Ingen installation.</p>
+      <p>Klicka på spelfönstret uppe till höger för att expandera och börja spela.</p>
+      <div class="deco-row">
+        <div class="deco-brick"></div>
+        <div class="deco-brick"></div>
+        <div class="deco-brick"></div>
+        <div class="deco-brick"></div>
+        <div class="deco-brick"></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>BRICK BREAK</h2>
+      <p>Breakout-inspirerat spel med CRT-skärmseffekt, rymdskepp och
+         pixelexplosioner. Slå hiscorerna och klättra till toppen!</p>
+      <p class="key-hint">
+        ← →&nbsp;&nbsp; FLYTTA PADDELN<br>
+        SPACE&nbsp;&nbsp; STARTA / SKJUT BOLLEN
+      </p>
+    </section>
+  </main>
+
+  <!-- ── Flytande spelfönster ────────────────────────────────────────────── -->
+  <div class="bb-window mini" id="bb-window">
+    <div class="bb-header">
+      <span class="bb-title">BRICK BREAK</span>
+      <button class="bb-btn-toggle" id="bb-btn-toggle">+</button>
+    </div>
+    <div id="game"></div>
+  </div>
 
   <script type="module">
     import { BrickBreak } from './brick-break.js';
 
-    // Initiera spelet med standardkonfiguration
-    // Överskrid valfria värden som andra argument
     BrickBreak.init('#game', {
       lives: 3,
       minSpeed: 150,
@@ -66,6 +151,31 @@
       canvasWidth: 480,
       canvasHeight: 640,
     });
+
+    const win = document.getElementById('bb-window');
+    const btn = document.getElementById('bb-btn-toggle');
+
+    function expand() {
+      win.classList.replace('mini', 'expanded');
+      btn.textContent = '-';
+    }
+
+    function collapse() {
+      win.classList.replace('expanded', 'mini');
+      btn.textContent = '+';
+    }
+
+    // Klick på mini-fönstret → expandera
+    win.addEventListener('click', () => {
+      if (win.classList.contains('mini')) expand();
+    });
+
+    // Klick på +/- knappen
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      win.classList.contains('expanded') ? collapse() : expand();
+    });
   </script>
+
 </body>
 </html>
