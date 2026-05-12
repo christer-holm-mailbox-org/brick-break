@@ -180,11 +180,12 @@ function setupInput() {
     if (e.key === 'ArrowRight' || e.key === 'd') keys.right = true;
     if (e.key === ' ') {
       e.preventDefault();
-      // SPACE under attract-läge → starta riktigt spel
       if (state === 'ATTRACT_TITLE' || state === 'ATTRACT_HISCORE' || isDemoMode) {
-        startRealGame();
-        return;
+        startRealGame(); return;
       }
+      if (state === 'PAUSED') { resumeGame(); return; }
+      // Pausa endast när bollen är i rörelse (inte vid ballLaunch-läget)
+      if (state === 'PLAYING' && !ballLaunch) { pauseGame(); return; }
       keys.space = true;
     }
   };
@@ -207,14 +208,16 @@ function setupInput() {
   // När musen lämnar canvas – återgå till tangentbordsstyrning
   mouseLeaveHandler = () => { mouseX = null; };
 
-  // Klick: starta boll eller spel (motsvarar SPACE)
+  // Klick: starta boll, pausa/fortsätt eller starta spel
   mouseClickHandler = (e) => {
     e.stopPropagation();  // förhindrar att expand-klick triggas av spelet
     if (state === 'ATTRACT_TITLE' || state === 'ATTRACT_HISCORE' || isDemoMode) {
       startRealGame(); return;
     }
-    if (state === 'GAME_OVER') { startAttractTitle(); return; }
-    if (state === 'PLAYING' && ballLaunch) ballLaunch = false;
+    if (state === 'GAME_OVER')                     { startAttractTitle(); return; }
+    if (state === 'PAUSED')                        { resumeGame();        return; }
+    if (state === 'PLAYING' && ballLaunch)         { ballLaunch = false;  return; }
+    if (state === 'PLAYING' && !ballLaunch)        { pauseGame();         return; }
   };
 
   canvas.addEventListener('mousemove',  mouseMoveHandler);
@@ -395,6 +398,9 @@ function update(dt) {
   // Löper alltid, oavsett spelläge
   updatePopups();
   updateParticles(dt);
+
+  // ── Paus – frys all spellogik ──
+  if (state === 'PAUSED') return;
 
   // ── Attract-skärmar (inget spel) ──
   if (state === 'ATTRACT_TITLE') {
@@ -692,6 +698,31 @@ function spawnExplosion(cx, cy) {
   }
 }
 
+// ── Paus ─────────────────────────────────────────────────────────────────────
+
+function pauseGame()  { state = 'PAUSED';  }
+function resumeGame() { state = 'PLAYING'; }
+
+function renderPauseOverlay() {
+  // Halvgenomskinlig mörk yta över spelplanen
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(0, PLAY_TOP, W, PLAY_BOT - PLAY_TOP);
+
+  ctx.font      = '10px "Press Start 2P"';
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.fillText('PAUSED', W / 2, 152);
+
+  const blink = Math.floor(frameCount / 30) % 2 === 0;
+  ctx.font      = '6px "Press Start 2P"';
+  ctx.fillStyle = blink ? '#ffdd00' : '#443300';
+  ctx.fillText('SPACE / KLICK', W / 2, 172);
+  ctx.fillStyle = blink ? '#ffdd00' : '#443300';
+  ctx.fillText('FORTSATT', W / 2, 184);
+
+  ctx.textAlign = 'left';
+}
+
 // ── Render (huvud) ────────────────────────────────────────────────────────────
 
 function render() {
@@ -717,6 +748,7 @@ function render() {
     renderParticles();
     if (state === 'LEVEL_COMPLETE') renderLevelComplete();
     if (isDemoMode)                 renderDemoOverlay();
+    if (state === 'PAUSED')         renderPauseOverlay();
   }
 
   renderScanlines();
