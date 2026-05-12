@@ -1,0 +1,20 @@
+# Nodpaket – används av npx-verktyg (http-server, eslint)
+node_modules/
+
+# Operativsystem
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+*.suo
+*.user
+
+# Loggfiler
+*.log
+npm-debug.log*
+
+# Byggartefakter (om ett byggsystem läggs till)
+dist/
+build/

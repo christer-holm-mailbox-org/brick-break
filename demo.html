@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Brick Break – Demo</title>
+  <link rel="stylesheet" href="brick-break.css">
+  <style>
+    /* ── Demosida-layout ────────────────────────────────────────────────── */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0a0a0f;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: 'Press Start 2P', monospace;
+      gap: 16px;
+      padding: 24px;
+    }
+
+    h1 {
+      font-size: 16px;
+      color: #ffffff;
+      letter-spacing: 4px;
+    }
+
+    #game {
+      /* Responsiv skalning: aldrig bredare än skärmen */
+      max-width: 100%;
+    }
+
+    .instructions {
+      font-size: 8px;
+      color: #555566;
+      text-align: center;
+      line-height: 1.8;
+    }
+  </style>
+</head>
+<body>
+  <h1>BRICK BREAK</h1>
+
+  <!-- Spelet mountas här av BrickBreak.init -->
+  <div id="game"></div>
+
+  <p class="instructions">
+    ← → FLYTTA &nbsp;&nbsp; SPACE STARTA / SKJUT
+  </p>
+
+  <script type="module">
+    import { BrickBreak } from './brick-break.js';
+
+    // Initiera spelet med standardkonfiguration
+    // Överskrid valfria värden som andra argument
+    BrickBreak.init('#game', {
+      lives: 3,
+      minSpeed: 150,
+      maxSpeed: 420,
+      speedIncrement: 4,
+      shipIntervalMin: 60,
+      shipIntervalMax: 120,
+      brickRows: 5,
+      canvasWidth: 480,
+      canvasHeight: 640,
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "name": "brick-break",
+  "version": "0.1.0",
+  "description": "Breakout-inspirerat arkadspel i vanilla JavaScript med pixelkonst-estetik",
+  "type": "module",
+  "main": "brick-break.js",
+  "scripts": {
+    "start": "npx http-server . -p 3000 -o",
+    "lint": "npx eslint brick-break.js"
+  },
+  "keywords": ["game", "breakout", "pixel-art", "canvas", "vanilla-js"],
+  "author": "christer.holm@nordic.one",
+  "license": "MIT"
+}

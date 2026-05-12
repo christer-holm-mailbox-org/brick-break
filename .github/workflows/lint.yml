@@ -1,0 +1,26 @@
+# Kör ESLint automatiskt vid push och pull request mot main
+name: Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  eslint:
+    name: ESLint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Hämta källkod
+        uses: actions/checkout@v4
+
+      - name: Sätt upp Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Kör ESLint
+        # npx laddar ner eslint utan att det behöver vara installerat lokalt
+        run: npx eslint brick-break.js

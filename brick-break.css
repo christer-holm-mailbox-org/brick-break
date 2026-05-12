@@ -1,0 +1,26 @@
+/**
+ * brick-break.css – Styling för Brick Break
+ *
+ * Kanvasen skalas 2× via CSS vilket ger äkta "stor pixel"-känsla.
+ * image-rendering: pixelated förhindrar webbläsarens utjämning (anti-aliasing).
+ */
+
+/* Importera pixelkonst-typsnittet från Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+/* Container för hela spelmodulen */
+.brick-break-container {
+  display: inline-block;
+  line-height: 0; /* tar bort extra utrymme under canvas */
+}
+
+/* Kanvasen – skalas upp 2× med pixelrendering */
+.brick-break-container canvas {
+  width: 480px;   /* CSS-storlek = dubbla den logiska upplösningen */
+  height: 640px;
+  image-rendering: pixelated;       /* Chrome, Edge, Opera */
+  image-rendering: crisp-edges;     /* Firefox */
+  border: 2px solid #1a1a3a;
+  box-shadow: 0 0 20px rgba(0, 170, 255, 0.2);
+  display: block;
+}
