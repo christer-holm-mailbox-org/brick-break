@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Brick Break</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="stylesheet" href="brick-break.css">
+  <link rel="stylesheet" href="game.css">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -43,10 +43,7 @@
       color: #666677;
     }
 
-    .section {
-      margin-top: 48px;
-      max-width: 560px;
-    }
+    .section { margin-top: 48px; max-width: 560px; }
 
     .section h2 {
       font-family: 'Press Start 2P', monospace;
@@ -68,11 +65,7 @@
 
     .deco-row { display: flex; gap: 4px; margin: 32px 0; }
 
-    .deco-brick {
-      height: 12px;
-      width: 56px;
-      border: 2px solid;
-    }
+    .deco-brick { height: 12px; width: 56px; border: 2px solid; }
 
     .deco-brick:nth-child(1) { background: #0a3d1a; border-color: #27ae60 #051a0d #051a0d #27ae60; }
     .deco-brick:nth-child(2) { background: #6b5a00; border-color: #f1c40f #3a3000 #3a3000 #f1c40f; }
@@ -83,9 +76,7 @@
 </head>
 <body>
 
-  <header class="site-header">
-    ARCADE<span>ZONE</span>
-  </header>
+  <header class="site-header">ARCADE<span>ZONE</span></header>
 
   <main>
     <section class="hero">
@@ -101,7 +92,6 @@
         <div class="deco-brick"></div>
       </div>
     </section>
-
     <section class="section">
       <h2>BRICK BREAK</h2>
       <p>Breakout-inspirerat spel med rymdskepp och pixelexplosioner.
@@ -113,7 +103,6 @@
     </section>
   </main>
 
-  <!-- Flytande spelfönster -->
   <div class="bb-window mini" id="bb-window">
     <div class="bb-header">
       <span class="bb-title">BRICK BREAK</span>
@@ -122,9 +111,9 @@
     <div id="game"></div>
   </div>
 
-  <script type="module">
-    import { BrickBreak } from './brick-break.js';
-
+  <!-- Bundlad och minifierad spelmotor – genererad av: npm run build -->
+  <script src="game.js"></script>
+  <script>
     BrickBreak.init('#game');
 
     const win = document.getElementById('bb-window');

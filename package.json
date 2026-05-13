@@ -6,7 +6,9 @@
   "main": "brick-break.js",
   "scripts": {
     "start": "npx http-server . -p 3000 -o",
-    "lint": "npx eslint brick-break.js"
+    "lint":  "npx eslint brick-break.js",
+    "build": "npx esbuild brick-break.js --bundle --minify --format=iife --global-name=BrickBreak --outfile=dist/game.js && npx esbuild brick-break.css --minify --outfile=dist/game.css && npx javascript-obfuscator dist/game.js --output dist/game.js --compact true --identifier-names-generator hexadecimal --rename-globals false --string-array true --string-array-calls-transform true --string-array-encoding base64 --self-defending true",
+    "serve": "npx http-server dist -p 3000 -o"
   },
   "keywords": ["game", "breakout", "pixel-art", "canvas", "vanilla-js"],
   "author": "christer.holm@nordic.one",

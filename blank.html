@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Brick Break</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="brick-break.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #000000; }
+  </style>
+</head>
+<body>
+
+  <div class="bb-window mini" id="bb-window">
+    <div class="bb-header">
+      <span class="bb-title">BRICK BREAK</span>
+      <button class="bb-btn-toggle" id="bb-btn-toggle">+</button>
+    </div>
+    <div id="game"></div>
+  </div>
+
+  <script type="module">
+    import { BrickBreak } from './brick-break.js';
+
+    BrickBreak.init('#game');
+
+    const win = document.getElementById('bb-window');
+    const btn = document.getElementById('bb-btn-toggle');
+
+    win.addEventListener('click', () => {
+      if (win.classList.contains('mini')) {
+        win.classList.replace('mini', 'expanded');
+        btn.textContent = '-';
+      }
+    });
+
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (win.classList.contains('expanded')) {
+        win.classList.replace('expanded', 'mini');
+        btn.textContent = '+';
+      } else {
+        win.classList.replace('mini', 'expanded');
+        btn.textContent = '-';
+      }
+    });
+  </script>
+
+</body>
+</html>

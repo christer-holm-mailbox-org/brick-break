@@ -15,6 +15,9 @@ desktop.ini
 *.log
 npm-debug.log*
 
-# Byggartefakter (om ett byggsystem läggs till)
-dist/
-build/
+# Byggartefakter – genereras av: npm run build
+dist/game.js
+dist/game.css
+
+# Lokala anteckningar – checkas aldrig in
+.commit-notes.md

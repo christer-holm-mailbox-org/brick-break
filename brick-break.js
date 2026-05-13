@@ -128,6 +128,7 @@ let shipTimer, paddleShrinkTimer, brickHitCount, frameCount, pauseTimer, ballLau
 
 // Bollhastighet – stiger med varje ny karta, återställs till detta värde vid bollförlust
 let currentMinSpeed;
+let ballLaunchTimer;  // sekunder kvar innan bollen startar automatiskt
 
 // Input
 let keys, spaceConsumed;
@@ -167,6 +168,12 @@ function init(selector, options = {}) {
   initHiscores();
   initAttractBricks();
   startAttractTitle();
+
+  // Hämta maps/manifest.json automatiskt – laddas asynkront utan att blockera spelet
+  fetch('maps/manifest.json')
+    .then(r => r.ok ? r.json() : [])
+    .then(files => files.length > 0 ? loadMaps(files.map(f => `maps/${f}`)) : null)
+    .catch(() => {});
 
   animFrameId = requestAnimationFrame(loop);
 }
@@ -352,8 +359,9 @@ function startRealGame() {
   bricks            = buildBricks(config.brickRows, loadedMaps.length > 0 ? loadedMaps[0] : null);
   placePaddle();
   placeBall();
-  ballLaunch   = true;
-  keys.space   = false;
+  ballLaunch        = true;
+  ballLaunchTimer   = 5;
+  keys.space        = false;
   spaceConsumed = false;
   state        = 'PLAYING';
 }
@@ -373,6 +381,7 @@ function startLevel() {
   placePaddle();
   placeBall();
   ballLaunch        = isDemoMode ? false : true;  // AI-demo behöver inte trycka SPACE
+  ballLaunchTimer   = 5;
   brickHitCount     = 0;
   paddleShrinkTimer = config.paddleShrinkInterval;
   state             = 'PLAYING';
@@ -510,8 +519,9 @@ function update(dt) {
         pauseTimer = 60 * 7;  // 7 sekunder, eller hoppa med SPACE/klick
       } else {
         placeBall();
-        ballLaunch = true;
-        state = 'PLAYING';
+        ballLaunch      = true;
+        ballLaunchTimer = 5;
+        state           = 'PLAYING';
       }
     }
     return;
@@ -597,6 +607,10 @@ function updateBall(dt) {
     if (keys.space && !spaceConsumed) {
       spaceConsumed = true;
       ballLaunch = false;
+    } else {
+      // Automatisk start om spelaren inte agerar inom 5 sekunder
+      ballLaunchTimer -= dt;
+      if (ballLaunchTimer <= 0) ballLaunch = false;
     }
     return;
   }
