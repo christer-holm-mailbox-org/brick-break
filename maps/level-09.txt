@@ -1,0 +1,26 @@
+# Bana 9 – Labyrinten
+# Hög svårighetsgrad med både metall och guldhinder.
+#
+# Typtecken:
+#   G = grön    (10p, 1 träff)
+#   Y = gul     (15p, 1 träff)
+#   O = orange  (20p, 1 träff)
+#   R = röd     (25p, 1 träff)
+#   L = lila    (30p, 1 träff)
+#   B = blå     (35p, 1 träff)
+#   P = rosa    (40p, 1 träff)
+#   V = vit     (45p, 1 träff)
+#   H = hard/metall (50p, 2 träffar, mörkgrå)
+#   X = permanent (0p, oförstörbar, guld metall)
+#   . = tom cell
+#
+X.PPPPPP.X
+X.P....P.X
+X.P.HH.P.X
+X.P.HH.P.X
+X.P....P.X
+X.X.XX.X.X
+..........
+.HHHHHHHH.
+..........
+RRRRRRRRRR

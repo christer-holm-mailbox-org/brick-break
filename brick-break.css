@@ -89,6 +89,7 @@
 
 #game canvas {
   display: block;
+  cursor: none;
   image-rendering: pixelated;      /* Chrome, Edge, Opera */
   image-rendering: crisp-edges;    /* Firefox */
   /* Storlekstransition – animerar mini ↔ expanded */
@@ -105,5 +106,4 @@
 .bb-window.expanded #game canvas {
   width: 480px;
   height: 640px;
-  cursor: none;
 }

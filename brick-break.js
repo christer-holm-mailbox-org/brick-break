@@ -17,7 +17,7 @@
 import { DEFAULT_CONFIG, META_CONFIG } from './config.js';
 
 // ── Publik API ────────────────────────────────────────────────────────────────
-export const BrickBreak = { init, destroy };
+export const BrickBreak = { init, destroy, loadMaps };
 
 // ── Spelkonstanter ────────────────────────────────────────────────────────────
 const W = 240;    // intern canvas-bredd (logiska pixlar)
@@ -29,21 +29,30 @@ const PLAY_TOP    = 19;   // spelytans överkant
 const PLAY_BOT    = 301;  // spelytans underkant
 const PADDLE_Y    = 288;  // paddelns överkant-y
 
-const BRICK_COLS    = 6;
-const BRICK_W       = 37;
+const BRICK_COLS    = 10;
+const BRICK_W       = 21;  // (240 - 2×6 marginal - 9×2 gap) / 10 = 21px
 const BRICK_H       = 9;
 const BRICK_GAP     = 2;
-const BRICK_LEFT    = 4;
-const BRICK_START_Y = 24;
+const BRICK_LEFT    = 6;   // centrerar de 10 brickorna: (240-228)/2 = 6px
+const BRICK_START_Y = 42;  // skeppet flyger på y=22–30, brickorna börjar efter
 
-// [fill, highlight, shadow, poäng] per brickrad
-const BRICK_COLORS = [
-  ['#6b0000', '#e74c3c', '#3a0000', 40],
-  ['#6b2800', '#e67e22', '#3a1500', 30],
-  ['#6b5a00', '#f1c40f', '#3a3000', 20],
-  ['#0a3d1a', '#27ae60', '#051a0d', 10],
-  ['#0a2050', '#3498db', '#050f28', 10],
-];
+// Bricktyper – nyckel = ASCII-tecken i kartfiler
+// hits: Infinity = oförstörbar (permanent)
+const BRICK_TYPES = {
+  G: { fill: '#0a3d1a', highlight: '#27ae60', shadow: '#051a0d', points: 10, hits: 1 },  // Grön
+  Y: { fill: '#6b5a00', highlight: '#f1c40f', shadow: '#3a3000', points: 15, hits: 1 },  // Gul
+  O: { fill: '#6b2800', highlight: '#e67e22', shadow: '#3a1500', points: 20, hits: 1 },  // Orange
+  R: { fill: '#6b0000', highlight: '#e74c3c', shadow: '#3a0000', points: 25, hits: 1 },  // Röd
+  L: { fill: '#2a0a50', highlight: '#9b59b6', shadow: '#150528', points: 30, hits: 1 },  // Lila
+  B: { fill: '#0a2050', highlight: '#3498db', shadow: '#050f28', points: 35, hits: 1 },  // Blå
+  P: { fill: '#5a0a38', highlight: '#ff44cc', shadow: '#2a0518', points: 40, hits: 1 },  // Rosa
+  V: { fill: '#383848', highlight: '#f0f0f8', shadow: '#18182a', points: 45, hits: 1 },  // Vit
+  H: { fill: '#2a2a3a', highlight: '#888899', shadow: '#111120', points: 50, hits: 2 },  // Hard – mörkgrå, tål 2 träffar
+  X: { fill: '#3d2e00', highlight: '#ffd700', shadow: '#1a1400', points:  0, hits: Infinity },  // Permanent – guld, oförstörbar
+};
+
+// Standardordning på typer vid automatisk radgenerering (utan kartfil)
+const DEFAULT_ROW_TYPES = ['G', 'Y', 'O', 'R', 'L', 'B'];
 
 // Pixelcirkel-maskar (koordinater relativt centrum) – aldrig arc()
 const CIRCLE_R3 = [
@@ -115,7 +124,10 @@ let ship;          // null | { x, y, vx, flip }
 let hiscores;      // [{ name, score }] – top 5
 
 // Timers och räknare
-let shipTimer, speedTimer, frameCount, pauseTimer, ballLaunch;
+let shipTimer, paddleShrinkTimer, brickHitCount, frameCount, pauseTimer, ballLaunch;
+
+// Bollhastighet – stiger med varje ny karta, återställs till detta värde vid bollförlust
+let currentMinSpeed;
 
 // Input
 let keys, spaceConsumed;
@@ -125,6 +137,9 @@ let mouseX = null;  // null = ingen aktiv musinput, annars logisk x-koordinat
 
 // Attract-animationer
 let attractBricks;  // fallande brickor på titelskärmen
+
+// Laddade kartdata – varje element är ett 2D-array av typtecken
+let loadedMaps = [];
 
 // ── Init & destroy ────────────────────────────────────────────────────────────
 
@@ -183,6 +198,7 @@ function setupInput() {
       if (state === 'ATTRACT_TITLE' || state === 'ATTRACT_HISCORE' || isDemoMode) {
         startRealGame(); return;
       }
+      if (state === 'ALL_CLEAR') { saveCurrentScore(); startAttractTitle(); return; }
       if (state === 'PAUSED') { resumeGame(); return; }
       // Pausa endast när bollen är i rörelse (inte vid ballLaunch-läget)
       if (state === 'PLAYING' && !ballLaunch) { pauseGame(); return; }
@@ -215,6 +231,7 @@ function setupInput() {
       startRealGame(); return;
     }
     if (state === 'GAME_OVER')                     { startAttractTitle(); return; }
+    if (state === 'ALL_CLEAR')                     { saveCurrentScore(); startAttractTitle(); return; }
     if (state === 'PAUSED')                        { resumeGame();        return; }
     if (state === 'PLAYING' && ballLaunch)         { ballLaunch = false;  return; }
     if (state === 'PLAYING' && !ballLaunch)        { pauseGame();         return; }
@@ -252,24 +269,26 @@ function saveCurrentScore() {
 
 // Skapar fallande brickor som bakgrundsanimation på titelskärmen
 function initAttractBricks() {
+  const types = Object.keys(BRICK_TYPES).filter(k => k !== 'X');
   attractBricks = [];
   for (let i = 0; i < 10; i++) {
     attractBricks.push({
-      x:   snap(Math.random() * (W - BRICK_W)),
-      y:   snap(-BRICK_H - Math.random() * H),
-      row: Math.floor(Math.random() * BRICK_COLORS.length),
-      dy:  12 + Math.random() * 22,
+      x:    snap(Math.random() * (W - BRICK_W)),
+      y:    snap(-BRICK_H - Math.random() * H),
+      type: types[Math.floor(Math.random() * types.length)],
+      dy:   12 + Math.random() * 22,
     });
   }
 }
 
 function updateAttractBricks(dt) {
+  const types = Object.keys(BRICK_TYPES).filter(k => k !== 'X');
   for (const b of attractBricks) {
     b.y += b.dy * dt;
     if (b.y > H + BRICK_H) {
       b.y   = -BRICK_H;
       b.x   = snap(Math.random() * (W - BRICK_W));
-      b.row = Math.floor(Math.random() * BRICK_COLORS.length);
+      b.type = types[Math.floor(Math.random() * types.length)];
     }
   }
 }
@@ -294,9 +313,16 @@ function startAttractDemo() {
   particles    = [];
   popups       = [];
   ship         = null;
-  shipTimer    = randBetween(config.shipIntervalMin, config.shipIntervalMax);
-  speedTimer   = 5;
-  bricks       = buildBricks(3);  // 3 rader ger bättre demo-rytm
+  shipTimer         = randBetween(config.shipIntervalMin, config.shipIntervalMax);
+  brickHitCount     = 0;
+  paddleShrinkTimer = config.paddleShrinkInterval;
+  currentMinSpeed   = config.minSpeed;
+  // Slumpmässig karta om tillgänglig, annars 3-raders standardlayout
+  if (loadedMaps.length > 0) {
+    bricks = buildBricks(config.brickRows, loadedMaps[Math.floor(Math.random() * loadedMaps.length)]);
+  } else {
+    bricks = buildBricks(3, null);
+  }
   placePaddle();
   placeBall();
   ballLaunch   = false;  // AI behöver inte trycka SPACE
@@ -319,9 +345,11 @@ function startRealGame() {
   particles    = [];
   popups       = [];
   ship         = null;
-  shipTimer    = randBetween(config.shipIntervalMin, config.shipIntervalMax);
-  speedTimer   = 5;
-  bricks       = buildBricks();
+  shipTimer         = randBetween(config.shipIntervalMin, config.shipIntervalMax);
+  brickHitCount     = 0;
+  paddleShrinkTimer = config.paddleShrinkInterval;
+  currentMinSpeed   = config.minSpeed;
+  bricks            = buildBricks(config.brickRows, loadedMaps.length > 0 ? loadedMaps[0] : null);
   placePaddle();
   placeBall();
   ballLaunch   = true;
@@ -333,21 +361,30 @@ function startRealGame() {
 // ── Spel-initiering ───────────────────────────────────────────────────────────
 
 function startLevel() {
-  bricks     = buildBricks();
+  const mapData = loadedMaps.length > 0
+    ? loadedMaps[(level - 1) % loadedMaps.length]
+    : null;
+  // Minimihastigheten stiger med varje karta; bollen sänks hit vid nivåstart och bollförlust
+  currentMinSpeed = Math.min(
+    config.minSpeed + (level - 1) * config.levelSpeedStep,
+    config.maxSpeed - 60,
+  );
+  bricks            = buildBricks(config.brickRows, mapData);
   placePaddle();
   placeBall();
-  ballLaunch = true;
-  speedTimer = 5;
-  state      = 'PLAYING';
+  ballLaunch        = isDemoMode ? false : true;  // AI-demo behöver inte trycka SPACE
+  brickHitCount     = 0;
+  paddleShrinkTimer = config.paddleShrinkInterval;
+  state             = 'PLAYING';
 }
 
 function placePaddle() {
-  const w = Math.max(24, 40 - (level - 1) * 2);  // minskar 2px/nivå, min 24px
+  const w = config.paddleStartWidth;
   paddle = { x: (W - w) / 2, vx: 0, width: w };
 }
 
 function placeBall() {
-  const speed = config.minSpeed;
+  const speed = currentMinSpeed;
   const angle = (randBetween(25, 45) * Math.PI / 180) * (Math.random() < 0.5 ? -1 : 1);
   ball = {
     x: W / 2,
@@ -360,20 +397,45 @@ function placeBall() {
   };
 }
 
-function buildBricks(rows = config.brickRows) {
-  rows = Math.min(rows, 8);
+// mapData: 2D-array av typtecken från parseMap(), eller null för standardlayout
+function buildBricks(rows = config.brickRows, mapData = null) {
   const result = [];
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < BRICK_COLS; c++) {
-      result.push({
-        x:     BRICK_LEFT + c * (BRICK_W + BRICK_GAP),
-        y:     BRICK_START_Y + r * (BRICK_H + BRICK_GAP),
-        row:   r,
-        flash: 0,
-        alive: true,
-      });
+
+  if (mapData) {
+    for (let r = 0; r < mapData.length; r++) {
+      for (let c = 0; c < BRICK_COLS; c++) {
+        const typeChar = mapData[r][c] ?? '.';
+        if (typeChar === '.') continue;
+        const typeDef = BRICK_TYPES[typeChar];
+        if (!typeDef) continue;
+        result.push({
+          x:        BRICK_LEFT + c * (BRICK_W + BRICK_GAP),
+          y:        BRICK_START_Y + r * (BRICK_H + BRICK_GAP),
+          type:     typeChar,
+          hitsLeft: typeDef.hits,
+          flash:    0,
+          alive:    true,
+        });
+      }
+    }
+  } else {
+    rows = Math.min(rows, 8);
+    for (let r = 0; r < rows; r++) {
+      const typeChar = DEFAULT_ROW_TYPES[r % DEFAULT_ROW_TYPES.length];
+      const typeDef  = BRICK_TYPES[typeChar];
+      for (let c = 0; c < BRICK_COLS; c++) {
+        result.push({
+          x:        BRICK_LEFT + c * (BRICK_W + BRICK_GAP),
+          y:        BRICK_START_Y + r * (BRICK_H + BRICK_GAP),
+          type:     typeChar,
+          hitsLeft: typeDef.hits,
+          flash:    0,
+          alive:    true,
+        });
+      }
     }
   }
+
   return result;
 }
 
@@ -418,8 +480,20 @@ function update(dt) {
 
   // ── Game Over ──
   if (state === 'GAME_OVER') {
-    if (keys.space && !spaceConsumed) {
+    pauseTimer--;
+    if (pauseTimer <= 0 || (keys.space && !spaceConsumed)) {
       spaceConsumed = true;
+      startAttractTitle();
+    }
+    return;
+  }
+
+  // ── Alla banor klara ──
+  if (state === 'ALL_CLEAR') {
+    pauseTimer--;
+    if (pauseTimer <= 0 || (keys.space && !spaceConsumed)) {
+      spaceConsumed = true;
+      saveCurrentScore();
       startAttractTitle();
     }
     return;
@@ -432,7 +506,8 @@ function update(dt) {
     if (pauseTimer <= 0) {
       if (lives <= 0) {
         saveCurrentScore();
-        state = 'GAME_OVER';
+        state      = 'GAME_OVER';
+        pauseTimer = 60 * 7;  // 7 sekunder, eller hoppa med SPACE/klick
       } else {
         placeBall();
         ballLaunch = true;
@@ -444,10 +519,21 @@ function update(dt) {
 
   // ── Nivå klar ──
   if (state === 'LEVEL_COMPLETE') {
+    // Attract-timern måste räknas ner även här så att demo-loopen inte fastnar
+    if (isDemoMode) {
+      attractTimer -= dt;
+      if (attractTimer <= 0) { startAttractHiscore(); return; }
+    }
     pauseTimer--;
     if (pauseTimer <= 0) {
       level++;
-      startLevel();
+      // Sista kartan klar (bara i riktigt spel med laddade kartor) → slutskärm
+      if (!isDemoMode && loadedMaps.length > 0 && level > loadedMaps.length) {
+        state      = 'ALL_CLEAR';
+        pauseTimer = 60 * 7;  // 7 sekunder vid 60fps, eller hoppa med SPACE/klick
+      } else {
+        startLevel();
+      }
     }
     return;
   }
@@ -467,9 +553,10 @@ function update(dt) {
 
   updateBall(dt);
   updateShip(dt);
-  updateSpeedTimer(dt);
+  updatePaddleShrink(dt);
 
-  if (bricks.every(b => !b.alive)) {
+  // Nivån är klar när alla förstörbara brickor är borta (diamanter räknas inte)
+  if (bricks.every(b => !b.alive || b.hitsLeft === Infinity)) {
     state      = 'LEVEL_COMPLETE';
     pauseTimer = 90;
   }
@@ -573,26 +660,54 @@ function checkBrickCollision() {
     const overlapY = Math.min(by + bh, brick.y + BRICK_H) - Math.max(by, brick.y);
     if (overlapX <= 0 || overlapY <= 0) continue;
 
-    if (overlapX < overlapY) ball.vx = -ball.vx;
-    else                     ball.vy = -ball.vy;
+    // Vänd rörelseriktning och skjut ut bollen ur brickan så att den aldrig fastnar
+    if (overlapX < overlapY) {
+      ball.vx = -ball.vx;
+      ball.x  = ball.x < brick.x + BRICK_W / 2 ? brick.x - 3 : brick.x + BRICK_W + 3;
+    } else {
+      ball.vy = -ball.vy;
+      ball.y  = ball.y < brick.y + BRICK_H / 2 ? brick.y - 3 : brick.y + BRICK_H + 3;
+    }
 
-    brick.alive = false;
+    const typeDef = BRICK_TYPES[brick.type] || BRICK_TYPES.R;
+
+    // Permanent-brickor studsar tillbaka men förstörs aldrig
+    if (brick.hitsLeft === Infinity) {
+      brick.flash = 1;
+      break;
+    }
+
+    brick.hitsLeft--;
     brick.flash = 1;
 
-    const [, highlight,, points] = BRICK_COLORS[brick.row % BRICK_COLORS.length];
-    const pts = points * level;
-    score += pts;
-    if (!isDemoMode && score > hiscore) hiscore = score;
+    if (brick.hitsLeft <= 0) {
+      brick.alive = false;
 
-    popups.push({
-      x:       brick.x + BRICK_W / 2,
-      y:       brick.y + BRICK_H / 2,
-      text:    `+${pts}`,
-      color:   highlight,
-      dy:      -0.5,
-      life:    40,
-      maxLife: 40,
-    });
+      // Öka hastigheten var speedHitInterval:e förstörd bricka
+      brickHitCount++;
+      if (brickHitCount % config.speedHitInterval === 0) {
+        const cur  = Math.hypot(ball.vx, ball.vy);
+        const next = Math.min(cur + config.speedIncrement, config.maxSpeed);
+        ball.vx   *= next / cur;
+        ball.vy   *= next / cur;
+      }
+
+      const pts = typeDef.points * level;
+      score += pts;
+      if (!isDemoMode && score > hiscore) hiscore = score;
+
+      if (pts > 0) {
+        popups.push({
+          x:       brick.x + BRICK_W / 2,
+          y:       brick.y + BRICK_H / 2,
+          text:    `+${pts}`,
+          color:   typeDef.highlight,
+          dy:      -0.5,
+          life:    40,
+          maxLife: 40,
+        });
+      }
+    }
 
     break;
   }
@@ -647,19 +762,15 @@ function spawnShip() {
   ship = { x: goRight ? -20 : W + 2, y: 22, vx: goRight ? 60 : -60, flip: !goRight };
 }
 
-// ── Hastighetsökning ──────────────────────────────────────────────────────────
+// ── Paddelkrympning ───────────────────────────────────────────────────────────
 
-function updateSpeedTimer(dt) {
+function updatePaddleShrink(dt) {
   if (ballLaunch) return;
-  speedTimer -= dt;
-  if (speedTimer <= 0) {
-    speedTimer = 5;
-    if (ball) {
-      const cur   = Math.hypot(ball.vx, ball.vy);
-      const next  = Math.min(cur + config.speedIncrement, config.maxSpeed);
-      const ratio = next / cur;
-      ball.vx *= ratio;
-      ball.vy *= ratio;
+  paddleShrinkTimer -= dt;
+  if (paddleShrinkTimer <= 0) {
+    paddleShrinkTimer = config.paddleShrinkInterval;
+    if (paddle.width > config.paddleMinWidth) {
+      paddle.width = Math.max(config.paddleMinWidth, paddle.width - 1);
     }
   }
 }
@@ -737,6 +848,8 @@ function render() {
     renderAttractHiscore();
   } else if (state === 'GAME_OVER') {
     renderGameOver();
+  } else if (state === 'ALL_CLEAR') {
+    renderAllClear();
   } else {
     // PLAYING / LIFE_LOST / LEVEL_COMPLETE
     renderHUD();
@@ -751,7 +864,6 @@ function render() {
     if (state === 'PAUSED')         renderPauseOverlay();
   }
 
-  renderScanlines();
 }
 
 // ── Attract-skärmar ───────────────────────────────────────────────────────────
@@ -760,7 +872,7 @@ function renderAttractTitle() {
   // Fallande brickor i bakgrunden (halvgenomskinliga)
   ctx.globalAlpha = 0.22;
   for (const b of attractBricks) {
-    const [fill, highlight, shadow] = BRICK_COLORS[b.row];
+    const { fill, highlight, shadow } = BRICK_TYPES[b.type] || BRICK_TYPES.R;
     ctx.fillStyle = fill;
     ctx.fillRect(b.x, b.y, BRICK_W, BRICK_H);
     ctx.fillStyle = highlight;
@@ -772,10 +884,11 @@ function renderAttractTitle() {
   }
   ctx.globalAlpha = 1;
 
-  // Titel – cyklar genom brickfärgernas highlight-färger
-  const ci = Math.floor(frameCount / 30) % BRICK_COLORS.length;
+  // Titel – cyklar genom bricktypernas highlight-färger (exkl. diamant)
+  const typeKeys = Object.keys(BRICK_TYPES).filter(k => k !== 'X');
+  const ci = Math.floor(frameCount / 30) % typeKeys.length;
   ctx.font      = '12px "Press Start 2P"';
-  ctx.fillStyle = BRICK_COLORS[ci][1];
+  ctx.fillStyle = BRICK_TYPES[typeKeys[ci]].highlight;
   ctx.textAlign = 'center';
   ctx.fillText('BRICK', W / 2, 104);
   ctx.fillText('BREAK', W / 2, 121);
@@ -852,11 +965,11 @@ function renderDemoOverlay() {
 
 // Rita en rad brickor centrerad på y (för dekoration på titelskärmen)
 function drawDecoBrickRow(y) {
+  const types  = Object.keys(BRICK_TYPES).filter(k => k !== 'X');
   const totalW = BRICK_COLS * BRICK_W + (BRICK_COLS - 1) * BRICK_GAP;
   const startX = Math.floor((W - totalW) / 2);
   for (let i = 0; i < BRICK_COLS; i++) {
-    const row = i % BRICK_COLORS.length;
-    const [fill, highlight, shadow] = BRICK_COLORS[row];
+    const { fill, highlight, shadow } = BRICK_TYPES[types[i % types.length]];
     const bx = startX + i * (BRICK_W + BRICK_GAP);
     ctx.fillStyle = fill;
     ctx.fillRect(bx, y, BRICK_W, BRICK_H);
@@ -888,6 +1001,41 @@ function renderGameOver() {
   const blink = Math.floor(frameCount / 30) % 2 === 0;
   ctx.fillStyle = blink ? '#ffdd00' : '#05050f';
   ctx.fillText('PRESS SPACE', W / 2, 194);
+
+  ctx.textAlign = 'left';
+}
+
+function renderAllClear() {
+  renderHUD();
+
+  // Blinkande guldram runt spelplanen
+  const blink = Math.floor(frameCount / 20) % 2 === 0;
+  if (blink) {
+    ctx.strokeStyle = '#ffd700';
+    ctx.lineWidth   = 2;
+    ctx.strokeRect(2, PLAY_TOP + 2, W - 4, PLAY_BOT - PLAY_TOP - 4);
+    ctx.lineWidth = 1;
+  }
+
+  ctx.font      = '8px "Press Start 2P"';
+  ctx.fillStyle = '#ffd700';
+  ctx.textAlign = 'center';
+  ctx.fillText('GRATTIS!', W / 2, 118);
+
+  ctx.font      = '6px "Press Start 2P"';
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText('DU KLARADE', W / 2, 140);
+  ctx.fillText('ALLA BANOR!', W / 2, 154);
+
+  ctx.fillStyle = '#ffdd00';
+  ctx.fillText(`POÄNG  ${String(score).padStart(5, '0')}`, W / 2, 176);
+  ctx.fillStyle = '#aaaaaa';
+  ctx.fillText(`BÄST   ${String(hiscore).padStart(5, '0')}`, W / 2, 190);
+
+  const blink2 = Math.floor(frameCount / 30) % 2 === 0;
+  ctx.font      = '5px "Press Start 2P"';
+  ctx.fillStyle = blink2 ? '#4ac8ff' : '#05050f';
+  ctx.fillText('PRESS SPACE', W / 2, 214);
 
   ctx.textAlign = 'left';
 }
@@ -936,7 +1084,8 @@ function renderBricks() {
   for (const b of bricks) {
     if (!b.alive && b.flash <= 0) continue;
 
-    const [fill, highlight, shadow] = BRICK_COLORS[b.row % BRICK_COLORS.length];
+    const typeDef = BRICK_TYPES[b.type] || BRICK_TYPES.R;
+    const { fill, highlight, shadow } = typeDef;
 
     if (b.flash > 0) {
       ctx.fillStyle = '#ffffff';
@@ -958,9 +1107,9 @@ function renderBricks() {
 
 function renderPaddle() {
   const { x, width } = paddle;
-  ctx.fillStyle = '#5dade2'; ctx.fillRect(x, PADDLE_Y,     width, 1);
-  ctx.fillStyle = '#2980b9'; ctx.fillRect(x, PADDLE_Y + 1, width, 3);
-  ctx.fillStyle = '#1a5276'; ctx.fillRect(x, PADDLE_Y + 4, width, 1);
+  ctx.fillStyle = '#aaaaaa'; ctx.fillRect(x, PADDLE_Y,     width, 1);  // highlight
+  ctx.fillStyle = '#555555'; ctx.fillRect(x, PADDLE_Y + 1, width, 3);  // kropp
+  ctx.fillStyle = '#222222'; ctx.fillRect(x, PADDLE_Y + 4, width, 1);  // skugga
 }
 
 function renderBall() {
@@ -978,12 +1127,12 @@ function renderBall() {
   const trailAlpha = [0.5, 0.3, 0.2, 0.1, 0.05];
   for (let i = 0; i < ball.trail.length; i++) {
     ctx.globalAlpha = trailAlpha[i];
-    drawPixelCircle(ctx, Math.round(ball.trail[i].x), Math.round(ball.trail[i].y), trailMasks[i], '#2a88bf');
+    drawPixelCircle(ctx, Math.round(ball.trail[i].x), Math.round(ball.trail[i].y), trailMasks[i], '#888888');
   }
   ctx.globalAlpha = 1;
 
   const bx = Math.round(ball.x), by = Math.round(ball.y);
-  drawPixelCircle(ctx, bx, by, CIRCLE_R3, '#4ac8ff');
+  drawPixelCircle(ctx, bx, by, CIRCLE_R3, '#d0d0d8');  // silverboll
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(bx - 1, by - 1, 1, 1);
 }
@@ -1036,12 +1185,30 @@ function renderParticles() {
   ctx.globalAlpha = 1;
 }
 
-// CRT-scanline-effekt – horisontella halvgenomskinliga linjer varannan rad
-function renderScanlines() {
-  ctx.fillStyle = 'rgba(0,0,0,0.18)';
-  for (let y = 1; y < H; y += 2) {
-    ctx.fillRect(0, y, W, 1);
-  }
+
+// ── Karthantering ─────────────────────────────────────────────────────────────
+
+// Tolkar en textfil till ett 2D-array av typtecken.
+// Format: ett tecken per kolumn, 10 tecken per rad.
+// '.' = tom cell, '#' i kolumn 0 = kommentarrad, tomma rader ignoreras.
+function parseMap(text) {
+  return text.split('\n')
+    .map(l => l.trim())
+    .filter(l => l.length > 0 && !l.startsWith('#'))
+    .map(line => [...line.slice(0, BRICK_COLS).padEnd(BRICK_COLS, '.')]);
+}
+
+// Laddar en enskild kartfil och returnerar dess parsade data
+async function loadMap(url) {
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`[BrickBreak] Kunde inte ladda karta: ${url}`);
+  return parseMap(await resp.text());
+}
+
+// Förladdar ett antal kartfiler – anropas från host-sidan innan spelet börjar.
+// Anropas async: await BrickBreak.loadMaps(['maps/level-01.txt', 'maps/level-02.txt'])
+async function loadMaps(urls) {
+  loadedMaps = await Promise.all(urls.map(loadMap));
 }
 
 // ── Hjälpfunktioner ───────────────────────────────────────────────────────────

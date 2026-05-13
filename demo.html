@@ -152,6 +152,13 @@
       canvasHeight: 640,
     });
 
+    // Ladda kartfiler – misslyckad laddning faller tillbaka på standardlayout
+    BrickBreak.loadMaps([
+      'maps/level-01.txt',
+      'maps/level-02.txt',
+      'maps/level-03.txt',
+    ]).catch(err => console.warn('[BrickBreak] Kartladdning misslyckades:', err));
+
     const win = document.getElementById('bb-window');
     const btn = document.getElementById('bb-btn-toggle');
 

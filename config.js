@@ -35,6 +35,21 @@ export const DEFAULT_CONFIG = {
   /** Antal brickorader (1–8) */
   brickRows: 5,
 
+  /** Paddelns startbredd i logiska pixlar */
+  paddleStartWidth: 40,
+
+  /** Paddelns minsta tillåtna bredd i logiska pixlar */
+  paddleMinWidth: 20,
+
+  /** Sekunder mellan varje steg av paddelkrympning (1px per steg) */
+  paddleShrinkInterval: 8,
+
+  /** Antal brickor spelaren måste träffa innan bollhastigheten ökar ett steg */
+  speedHitInterval: 10,
+
+  /** Minimihastigheten höjs med detta värde (px/s) per ny karta */
+  levelSpeedStep: 10,
+
   /** Canvas CSS-bredd i pixlar (intern upplösning = hälften) */
   canvasWidth: 480,
 

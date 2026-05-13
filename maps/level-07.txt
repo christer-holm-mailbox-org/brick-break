@@ -1,0 +1,26 @@
+# Bana 7 – Dödskallen
+# Kombinerar metallbrickor i ögonen och en tunnel i munnen.
+#
+# Typtecken:
+#   G = grön    (10p, 1 träff)
+#   Y = gul     (15p, 1 träff)
+#   O = orange  (20p, 1 träff)
+#   R = röd     (25p, 1 träff)
+#   L = lila    (30p, 1 träff)
+#   B = blå     (35p, 1 träff)
+#   P = rosa    (40p, 1 träff)
+#   V = vit     (45p, 1 träff)
+#   H = hard/metall (50p, 2 träffar, mörkgrå)
+#   X = permanent (0p, oförstörbar, guld metall)
+#   . = tom cell
+#
+..VVVVVV..
+.VHHVVHHV.
+.VHHVVHHV.
+.VVVVVVVV.
+..VVVVVV..
+...VVVV...
+...V..V...
+...VHHV...
+....VV....
+..........
