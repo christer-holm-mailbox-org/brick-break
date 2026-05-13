@@ -14,7 +14,7 @@
  *   BrickBreak.init('#game', { lives: 3 });
  */
 
-import { DEFAULT_CONFIG, META_CONFIG } from './config.js';
+import { DEFAULT_CONFIG, META_CONFIG, SUPABASE_CONFIG } from './config.js';
 
 // ── Publik API ────────────────────────────────────────────────────────────────
 export const BrickBreak = { init, destroy, loadMaps };
@@ -53,6 +53,20 @@ const BRICK_TYPES = {
 
 // Standardordning på typer vid automatisk radgenerering (utan kartfil)
 const DEFAULT_ROW_TYPES = ['G', 'Y', 'O', 'R', 'L', 'B'];
+
+// Tangentgrid för namninmatning – tre rader med bokstäver + specialtangenter
+const NAME_GRID = [
+  ['A','B','C','D','E','F','G','H','I','J'],
+  ['K','L','M','N','O','P','Q','R','S','T'],
+  ['U','V','W','X','Y','Z','RUB','END'],
+];
+const NE_KEY_W   = 20;   // standardbredd för en bokstavstangent (px)
+const NE_KEY_H   = 12;   // höjd för alla tangenter (px)
+const NE_KEY_GAP =  2;   // mellanrum mellan tangenter (px)
+const NE_WIDE_W  = 42;   // bredd för RUB/END – exakt 2 tangenter + 1 gap
+const NE_START_X = 11;   // vänster startpunkt; centrerar 218px i 240px canvas
+const NE_ROW_Y   = [112, 126, 140];  // y-position (överkant) per tangentrad
+const NE_TIMER   = 30;   // sekunder att ange initialer
 
 // Pixelcirkel-maskar (koordinater relativt centrum) – aldrig arc()
 const CIRCLE_R3 = [
@@ -109,7 +123,7 @@ const INITIAL_HISCORES = [
 let canvas, ctx, animFrameId, config;
 
 // Spelläge
-let state;         // 'ATTRACT_TITLE'|'ATTRACT_HISCORE'|'PLAYING'|'LIFE_LOST'|'LEVEL_COMPLETE'|'GAME_OVER'
+let state;         // 'ATTRACT_TITLE'|'ATTRACT_HISCORE'|'PLAYING'|'LIFE_LOST'|'LEVEL_COMPLETE'|'GAME_OVER'|'ALL_CLEAR'|'NAME_ENTRY'
 let isDemoMode;    // true = AI styr paddeln (attract-demo)
 let attractTimer;  // sekunder kvar på aktuell attract-skärm
 
@@ -141,6 +155,17 @@ let attractBricks;  // fallande brickor på titelskärmen
 
 // Laddade kartdata – varje element är ett 2D-array av typtecken
 let loadedMaps = [];
+
+// Supabase-statistik – skickas med poänginlämning för server-side fuskkontroll
+let bricksDestroyedCount;  // totalt förstörda brickor under spelomgången
+let gameStartTime;          // tidsstämpel (ms) då spelomgången startade
+let scoreSaved;             // förhindrar dubbel poänginsändning per omgång
+
+// Namninmatning – aktiv under tillståndet NAME_ENTRY
+let nameEntryChars;      // inmatade tecken, max 3
+let nameEntryTimer;      // nedräkning i sekunder (0 → avbryt utan att spara)
+let nameEntryCursorRow;  // markerad rad i tangentgriddet (0–2)
+let nameEntryCursorCol;  // markerad kolumn i tangentgriddet
 
 // ── Init & destroy ────────────────────────────────────────────────────────────
 
@@ -198,6 +223,21 @@ function setupInput() {
   spaceConsumed = false;
 
   keydownHandler = (e) => {
+    // ── Namninmatning – fångar alla relevanta tangenter ──────────────────────────
+    if (state === 'NAME_ENTRY') {
+      const nav = ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' ','Enter','Backspace'];
+      if (nav.includes(e.key) || /^[A-Za-z]$/.test(e.key)) e.preventDefault();
+      if (e.key === 'Backspace')       { selectNameKey('RUB'); return; }
+      if (e.key === 'Enter')           { selectNameKey('END'); return; }
+      if (/^[A-Za-z]$/.test(e.key))   { selectNameKey(e.key.toUpperCase()); return; }
+      if (e.key === 'ArrowLeft')       { nameEntryCursorCol = Math.max(0, nameEntryCursorCol - 1); return; }
+      if (e.key === 'ArrowRight')      { nameEntryCursorCol = Math.min(NAME_GRID[nameEntryCursorRow].length - 1, nameEntryCursorCol + 1); return; }
+      if (e.key === 'ArrowUp')         { nameEntryCursorRow = Math.max(0, nameEntryCursorRow - 1); nameEntryCursorCol = Math.min(nameEntryCursorCol, NAME_GRID[nameEntryCursorRow].length - 1); return; }
+      if (e.key === 'ArrowDown')       { nameEntryCursorRow = Math.min(NAME_GRID.length - 1, nameEntryCursorRow + 1); nameEntryCursorCol = Math.min(nameEntryCursorCol, NAME_GRID[nameEntryCursorRow].length - 1); return; }
+      if (e.key === ' ')               { selectNameKey(NAME_GRID[nameEntryCursorRow][nameEntryCursorCol]); return; }
+      return;
+    }
+
     if (e.key === 'ArrowLeft'  || e.key === 'a') keys.left  = true;
     if (e.key === 'ArrowRight' || e.key === 'd') keys.right = true;
     if (e.key === ' ') {
@@ -205,7 +245,7 @@ function setupInput() {
       if (state === 'ATTRACT_TITLE' || state === 'ATTRACT_HISCORE' || isDemoMode) {
         startRealGame(); return;
       }
-      if (state === 'ALL_CLEAR') { saveCurrentScore(); startAttractTitle(); return; }
+      if (state === 'ALL_CLEAR') { if (score > 0) startNameEntry(); else startAttractTitle(); return; }
       if (state === 'PAUSED') { resumeGame(); return; }
       // Pausa endast när bollen är i rörelse (inte vid ballLaunch-läget)
       if (state === 'PLAYING' && !ballLaunch) { pauseGame(); return; }
@@ -222,26 +262,42 @@ function setupInput() {
   document.addEventListener('keydown', keydownHandler);
   document.addEventListener('keyup',   keyupHandler);
 
-  // Mus: paddeln följer muspekarens x-position direkt
+  // Mus: paddeln följer muspekaren, eller uppdaterar cursor i namninmatning
   mouseMoveHandler = (e) => {
     const rect = canvas.getBoundingClientRect();
-    mouseX = (e.clientX - rect.left) * (W / rect.width);  // skalkonvertering CSS→logisk
+    const lx   = (e.clientX - rect.left) * (W / rect.width);   // skalkonvertering CSS→logisk
+    const ly   = (e.clientY - rect.top)  * (H / rect.height);
+    if (state === 'NAME_ENTRY') {
+      const hit = getNameKeyAt(lx, ly);
+      if (hit) { nameEntryCursorRow = hit.row; nameEntryCursorCol = hit.col; }
+      mouseX = null;  // paddeln ska inte röra sig under namninmatning
+    } else {
+      mouseX = lx;
+    }
   };
 
   // När musen lämnar canvas – återgå till tangentbordsstyrning
   mouseLeaveHandler = () => { mouseX = null; };
 
-  // Klick: starta boll, pausa/fortsätt eller starta spel
+  // Klick: starta boll, pausa/fortsätt, starta spel, eller välj tangent vid namninmatning
   mouseClickHandler = (e) => {
     e.stopPropagation();  // förhindrar att expand-klick triggas av spelet
+    if (state === 'NAME_ENTRY') {
+      const rect = canvas.getBoundingClientRect();
+      const mx   = (e.clientX - rect.left) * (W / rect.width);
+      const my   = (e.clientY - rect.top)  * (H / rect.height);
+      const hit  = getNameKeyAt(mx, my);
+      if (hit) selectNameKey(NAME_GRID[hit.row][hit.col]);
+      return;
+    }
     if (state === 'ATTRACT_TITLE' || state === 'ATTRACT_HISCORE' || isDemoMode) {
       startRealGame(); return;
     }
-    if (state === 'GAME_OVER')                     { startAttractTitle(); return; }
-    if (state === 'ALL_CLEAR')                     { saveCurrentScore(); startAttractTitle(); return; }
-    if (state === 'PAUSED')                        { resumeGame();        return; }
-    if (state === 'PLAYING' && ballLaunch)         { ballLaunch = false;  return; }
-    if (state === 'PLAYING' && !ballLaunch)        { pauseGame();         return; }
+    if (state === 'GAME_OVER')              { if (score > 0) startNameEntry(); else startAttractTitle(); return; }
+    if (state === 'ALL_CLEAR')              { if (score > 0) startNameEntry(); else startAttractTitle(); return; }
+    if (state === 'PAUSED')                 { resumeGame();       return; }
+    if (state === 'PLAYING' && ballLaunch)  { ballLaunch = false; return; }
+    if (state === 'PLAYING' && !ballLaunch) { pauseGame();        return; }
   };
 
   canvas.addEventListener('mousemove',  mouseMoveHandler);
@@ -253,23 +309,74 @@ function setupInput() {
 
 function initHiscores() {
   const stored = sessionStorage.getItem('bb_scores');
-  if (stored) {
-    hiscores = JSON.parse(stored);
-  } else {
-    hiscores = INITIAL_HISCORES.map(e => ({ ...e }));
-    sessionStorage.setItem('bb_scores', JSON.stringify(hiscores));
-  }
-  hiscore = hiscores[0]?.score || 0;
+  hiscores = stored ? JSON.parse(stored) : INITIAL_HISCORES.map(e => ({ ...e }));
+  hiscore  = hiscores[0]?.score || 0;
+
+  // Hämta aktuell top-10 från databasen asynkront – uppdaterar utan att blockera spelstart
+  fetch(
+    `${SUPABASE_CONFIG.url}/rest/v1/hiscores?select=name,score&order=score.desc&limit=10`,
+    { headers: { apikey: SUPABASE_CONFIG.anon, Authorization: `Bearer ${SUPABASE_CONFIG.anon}` } },
+  )
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      if (data && data.length > 0) {
+        hiscores = data;
+        hiscore  = hiscores[0]?.score || 0;
+        sessionStorage.setItem('bb_scores', JSON.stringify(hiscores));
+      }
+    })
+    .catch(() => {});
 }
 
-// Sparar spelarens slutpoäng i hiscoreslistan
-function saveCurrentScore() {
-  if (score === 0) return;  // registrera bara om spelaren faktiskt spelade
-  hiscores.push({ name: 'YOU', score });
-  hiscores.sort((a, b) => b.score - a.score);
-  hiscores = hiscores.slice(0, 5);
-  sessionStorage.setItem('bb_scores', JSON.stringify(hiscores));
-  hiscore = hiscores[0].score;
+// Sparar spelarens slutpoäng – skickar till Supabase, faller tillbaka på lokal session
+async function saveCurrentScore(name = 'YOU') {
+  if (score === 0 || scoreSaved) return;
+  scoreSaved = true;
+
+  const timePlayed = Math.round((Date.now() - gameStartTime) / 1000);
+
+  try {
+    const token = await computeToken(score, bricksDestroyedCount);
+    const resp  = await fetch(SUPABASE_CONFIG.fnUrl, {
+      method:  'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${SUPABASE_CONFIG.anon}`,
+      },
+      body: JSON.stringify({
+        name,
+        score,
+        bricksDestroyed: bricksDestroyedCount,
+        timePlayed,
+        token,
+      }),
+    });
+    const data = await resp.json();
+    if (data.ok && Array.isArray(data.hiscores)) {
+      hiscores = data.hiscores;
+      hiscore  = hiscores[0]?.score || 0;
+      sessionStorage.setItem('bb_scores', JSON.stringify(hiscores));
+    }
+  } catch {
+    // Nätverk otillgängligt – lokal fallback
+    hiscores.push({ name: 'YOU', score });
+    hiscores.sort((a, b) => b.score - a.score);
+    hiscores = hiscores.slice(0, 10);
+    sessionStorage.setItem('bb_scores', JSON.stringify(hiscores));
+    hiscore = hiscores[0].score;
+  }
+}
+
+// Beräknar HMAC-SHA256-token klientsidan – speglar Edge Functions verifieringslogik
+async function computeToken(score, bricksDestroyed) {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw', enc.encode(SUPABASE_CONFIG.secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false, ['sign'],
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(`score=${score}&bricks=${bricksDestroyed}`));
+  return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 // ── Attract-animationer ───────────────────────────────────────────────────────
@@ -352,11 +459,14 @@ function startRealGame() {
   particles    = [];
   popups       = [];
   ship         = null;
-  shipTimer         = randBetween(config.shipIntervalMin, config.shipIntervalMax);
-  brickHitCount     = 0;
-  paddleShrinkTimer = config.paddleShrinkInterval;
-  currentMinSpeed   = config.minSpeed;
-  bricks            = buildBricks(config.brickRows, loadedMaps.length > 0 ? loadedMaps[0] : null);
+  shipTimer            = randBetween(config.shipIntervalMin, config.shipIntervalMax);
+  brickHitCount        = 0;
+  bricksDestroyedCount = 0;
+  gameStartTime        = Date.now();
+  scoreSaved           = false;
+  paddleShrinkTimer    = config.paddleShrinkInterval;
+  currentMinSpeed      = config.minSpeed;
+  bricks               = buildBricks(config.brickRows, loadedMaps.length > 0 ? loadedMaps[0] : null);
   placePaddle();
   placeBall();
   ballLaunch        = true;
@@ -492,8 +602,14 @@ function update(dt) {
     pauseTimer--;
     if (pauseTimer <= 0 || (keys.space && !spaceConsumed)) {
       spaceConsumed = true;
-      startAttractTitle();
+      if (score > 0) startNameEntry(); else startAttractTitle();
     }
+    return;
+  }
+
+  // ── Namninmatning ──
+  if (state === 'NAME_ENTRY') {
+    updateNameEntry(dt);
     return;
   }
 
@@ -502,8 +618,7 @@ function update(dt) {
     pauseTimer--;
     if (pauseTimer <= 0 || (keys.space && !spaceConsumed)) {
       spaceConsumed = true;
-      saveCurrentScore();
-      startAttractTitle();
+      if (score > 0) startNameEntry(); else startAttractTitle();
     }
     return;
   }
@@ -514,9 +629,8 @@ function update(dt) {
     pauseTimer--;
     if (pauseTimer <= 0) {
       if (lives <= 0) {
-        saveCurrentScore();
         state      = 'GAME_OVER';
-        pauseTimer = 60 * 7;  // 7 sekunder, eller hoppa med SPACE/klick
+        pauseTimer = 60 * 3;  // 3 sekunder, sedan vidare till namnregistrering
       } else {
         placeBall();
         ballLaunch      = true;
@@ -699,6 +813,7 @@ function checkBrickCollision() {
 
       // Öka hastigheten var speedHitInterval:e förstörd bricka
       brickHitCount++;
+      bricksDestroyedCount++;
       if (brickHitCount % config.speedHitInterval === 0) {
         const cur  = Math.hypot(ball.vx, ball.vy);
         const next = Math.min(cur + config.speedIncrement, config.maxSpeed);
@@ -828,6 +943,58 @@ function spawnExplosion(cx, cy) {
 function pauseGame()  { state = 'PAUSED';  }
 function resumeGame() { state = 'PLAYING'; }
 
+// ── Namninmatning ─────────────────────────────────────────────────────────────
+
+function startNameEntry() {
+  state              = 'NAME_ENTRY';
+  nameEntryChars     = '';
+  nameEntryTimer     = NE_TIMER;
+  nameEntryCursorRow = 0;
+  nameEntryCursorCol = 0;
+}
+
+function updateNameEntry(dt) {
+  nameEntryTimer -= dt;
+  if (nameEntryTimer <= 0) {
+    // Räknaren nådde 0 utan bekräftelse – spara inte poängen
+    startAttractTitle();
+  }
+}
+
+// Hanterar ett val i tangentgriddet (bokstav, RUB eller END)
+function selectNameKey(label) {
+  if (label === 'RUB') {
+    nameEntryChars = nameEntryChars.slice(0, -1);
+  } else if (label === 'END') {
+    if (nameEntryChars.length >= 1) {
+      saveCurrentScore(nameEntryChars);
+      startAttractTitle();
+    }
+  } else if (nameEntryChars.length < 3) {
+    nameEntryChars += label;
+    if (nameEntryChars.length === 3) {
+      // Flytta markören automatiskt till END när tre tecken är inmatade
+      nameEntryCursorRow = NAME_GRID.length - 1;
+      nameEntryCursorCol = NAME_GRID[nameEntryCursorRow].indexOf('END');
+    }
+  }
+}
+
+// Returnerar {row, col} för den tangent vars area innehåller logisk koordinat (mx, my)
+function getNameKeyAt(mx, my) {
+  for (let row = 0; row < NAME_GRID.length; row++) {
+    const ky = NE_ROW_Y[row];
+    if (my < ky || my > ky + NE_KEY_H) continue;
+    let x = NE_START_X;
+    for (let col = 0; col < NAME_GRID[row].length; col++) {
+      const kw = NAME_GRID[row][col].length > 1 ? NE_WIDE_W : NE_KEY_W;
+      if (mx >= x && mx <= x + kw) return { row, col };
+      x += kw + NE_KEY_GAP;
+    }
+  }
+  return null;
+}
+
 function renderPauseOverlay() {
   // Halvgenomskinlig mörk yta över spelplanen
   ctx.fillStyle = 'rgba(0,0,0,0.6)';
@@ -864,6 +1031,8 @@ function render() {
     renderGameOver();
   } else if (state === 'ALL_CLEAR') {
     renderAllClear();
+  } else if (state === 'NAME_ENTRY') {
+    renderNameEntry();
   } else {
     // PLAYING / LIFE_LOST / LEVEL_COMPLETE
     renderHUD();
@@ -1061,6 +1230,91 @@ function renderLevelComplete() {
   ctx.fillText('LEVEL', W / 2, 150);
   ctx.fillStyle = '#ffdd00';
   ctx.fillText('CLEAR!', W / 2, 163);
+  ctx.textAlign = 'left';
+}
+
+function renderNameEntry() {
+  // Rubrik
+  ctx.font      = '6px "Press Start 2P"';
+  ctx.fillStyle = '#4ac8ff';
+  ctx.textAlign = 'center';
+  ctx.fillText('ANGE INITIALER', W / 2, 26);
+
+  // Poäng
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(`POÄNG  ${String(score).padStart(5, '0')}`, W / 2, 42);
+
+  // Namnslottar – 3 st, 24×20 px var, centrerade
+  const slotW = 24, slotH = 20, slotGap = 8;
+  const slotX0 = Math.floor((W - (3 * slotW + 2 * slotGap)) / 2);
+  for (let i = 0; i < 3; i++) {
+    const bx     = slotX0 + i * (slotW + slotGap);
+    const filled = i < nameEntryChars.length;
+    ctx.fillStyle   = filled ? '#0a2050' : '#0a0a18';
+    ctx.fillRect(bx, 54, slotW, slotH);
+    ctx.strokeStyle = filled ? '#4ac8ff' : '#222233';
+    ctx.lineWidth   = 1;
+    ctx.strokeRect(bx + 0.5, 54.5, slotW - 1, slotH - 1);
+    if (filled) {
+      ctx.font      = '10px "Press Start 2P"';
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.fillText(nameEntryChars[i], bx + slotW / 2, 54 + slotH - 4);
+    }
+  }
+
+  // Timervärde – färg övergår grön → gul → röd
+  const timerFrac  = Math.max(0, nameEntryTimer) / NE_TIMER;
+  const timerColor = timerFrac > 0.5 ? '#27ae60' : timerFrac > 0.25 ? '#f1c40f' : '#e74c3c';
+  ctx.font      = '8px "Press Start 2P"';
+  ctx.fillStyle = timerColor;
+  ctx.textAlign = 'center';
+  ctx.fillText(String(Math.ceil(Math.max(0, nameEntryTimer))).padStart(2, '0'), W / 2, 96);
+
+  // Timer-stapel
+  const barW = W - 32;
+  ctx.fillStyle = '#1a1a3a';
+  ctx.fillRect(16, 100, barW, 3);
+  ctx.fillStyle = timerColor;
+  ctx.fillRect(16, 100, Math.round(barW * timerFrac), 3);
+
+  // Tangentgrid
+  for (let row = 0; row < NAME_GRID.length; row++) {
+    let x = NE_START_X;
+    const y = NE_ROW_Y[row];
+    for (let col = 0; col < NAME_GRID[row].length; col++) {
+      const label    = NAME_GRID[row][col];
+      const kw       = label.length > 1 ? NE_WIDE_W : NE_KEY_W;
+      const isCursor = nameEntryCursorRow === row && nameEntryCursorCol === col;
+      const isEnd    = label === 'END';
+      const isRub    = label === 'RUB';
+
+      // Tangentkropp
+      ctx.fillStyle = isCursor ? '#4ac8ff' : isEnd ? '#0a3300' : isRub ? '#3a1500' : '#1a1a3a';
+      ctx.fillRect(x, y, kw, NE_KEY_H);
+
+      // Highlight-kant (överkant + vänsterkant) – ger 3D-känsla
+      ctx.fillStyle = isCursor ? '#88eeff' : isEnd ? '#27ae60' : isRub ? '#e67e22' : '#333355';
+      ctx.fillRect(x, y, kw, 1);
+      ctx.fillRect(x, y, 1, NE_KEY_H);
+
+      // Tangent-etikett
+      const disabled = isEnd && nameEntryChars.length < 1;
+      ctx.font      = label.length > 2 ? '5px "Press Start 2P"' : '6px "Press Start 2P"';
+      ctx.fillStyle = isCursor ? '#000000' : disabled ? '#333344' : '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.fillText(label, x + kw / 2, y + NE_KEY_H - 3);
+
+      x += kw + NE_KEY_GAP;
+    }
+  }
+
+  // Hjälptext
+  ctx.font      = '5px "Press Start 2P"';
+  ctx.fillStyle = '#222233';
+  ctx.textAlign = 'center';
+  ctx.fillText('PILAR/MUS  SPACE/KLICK', W / 2, 170);
+
   ctx.textAlign = 'left';
 }
 
