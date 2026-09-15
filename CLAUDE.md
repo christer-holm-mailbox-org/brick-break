@@ -8,7 +8,7 @@ Fristående, embedderbar webbmodul (inga globala variabler, modulscoped state).
 - **Spelmotor**: Vanilla JS (ES2022-moduler), HTML5 Canvas 2D
 - **Rendering**: 240×320 logiska pixlar, 2× CSS-skalning → 480×640 px
 - **Databas**: Supabase (PostgreSQL), tabell `hiscores`
-- **Backend**: Supabase Edge Function (Deno/TypeScript) — `submit-score`
+- **Backend**: Supabase Edge Function (Deno/TypeScript) — `brick-break-submit-score`
 - **Build**: esbuild + javascript-obfuscator → `dist/`
 - **Lint**: ESLint v9 (flat config), GitHub Actions auto-lint
 
@@ -16,7 +16,7 @@ Fristående, embedderbar webbmodul (inga globala variabler, modulscoped state).
 - `brick-break.js` — Huvud-spelmotor (~1 500 rader)
 - `config.js` — Spelkonfiguration + Supabase-hemligheter
 - `maps/manifest.json` — Lista på 10 banfiler (ASCII-format, 10×10)
-- `supabase/functions/submit-score/index.ts` — Edge Function med HMAC-validering
+- `supabase/functions/brick-break-submit-score/index.ts` — Edge Function med HMAC-validering
 
 ## Arkitektoniska beslut
 - All spelstatus är modulscoped — inga globala variabler

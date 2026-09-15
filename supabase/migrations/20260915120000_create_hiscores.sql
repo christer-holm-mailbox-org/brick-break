@@ -16,7 +16,7 @@ create table if not exists "brick-break".hiscores (
   -- även på databasnivå ifall tabellen nås på annat sätt
   name text not null check (char_length(name) between 1 and 3),
 
-  -- Samma övre gräns som valideras i submit-score/index.ts
+  -- Samma övre gräns som valideras i brick-break-submit-score/index.ts
   score integer not null check (score >= 0 and score <= 999999),
 
   created_at timestamptz not null default now()
@@ -36,7 +36,7 @@ create policy "Anon kan läsa hiscores"
   using (true);
 
 -- Ingen insert/update/delete-policy skapas för anon eller authenticated –
--- endast service_role (används av Edge Function submit-score) kan skriva,
+-- endast service_role (används av Edge Function brick-break-submit-score) kan skriva,
 -- och service_role kringgår RLS helt per Supabase-design.
 
 -- PostgREST exponerar bara scheman som listas i api.schemas (config.toml) –

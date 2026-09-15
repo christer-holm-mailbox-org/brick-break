@@ -91,7 +91,7 @@ export const SUPABASE_CONFIG = {
   anon:   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1oY29saG1yYnhhbnNlZnRnaGxxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkxODI3MjUsImV4cCI6MjEwNDc1ODcyNX0.vpf_xoz1Px0vr_OdGwJB6spXLRdRjiHKJX99o3-hwi8',
 
   /** Edge Function-URL för poänginlämning */
-  fnUrl:  'https://mhcolhmrbxanseftghlq.supabase.co/functions/v1/submit-score',
+  fnUrl:  'https://mhcolhmrbxanseftghlq.supabase.co/functions/v1/brick-break-submit-score',
 
   /** HMAC-SHA256-hemlighet – måste matcha SCORE_HMAC_SECRET i Edge Function */
   secret: 'b08e369325a7aa329c7e3fad24943d8a86b6cf61c603519f736b7f2f95bc8bec',
