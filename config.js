@@ -85,13 +85,13 @@ export const META_CONFIG = {
 // ──────────────────────────────────────────────────────────────────────────────
 export const SUPABASE_CONFIG = {
   /** Projektets bas-URL från Supabase Project Settings → API */
-  url:    'https://zxbeyxaxmikrbcppvuex.supabase.co',
+  url:    'https://mhcolhmrbxanseftghlq.supabase.co',
 
   /** Anon/public-nyckel – tillåter publika SELECT-anrop via RLS */
-  anon:   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp4YmV5eGF4bWlrcmJjcHB2dWV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2Mzg1MzYsImV4cCI6MjA5NDIxNDUzNn0.yxprrlKhoxBD8MkO6eXNCoUs2iBtz_U5lI33P1Y0g9o',
+  anon:   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1oY29saG1yYnhhbnNlZnRnaGxxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkxODI3MjUsImV4cCI6MjEwNDc1ODcyNX0.vpf_xoz1Px0vr_OdGwJB6spXLRdRjiHKJX99o3-hwi8',
 
   /** Edge Function-URL för poänginlämning */
-  fnUrl:  'https://zxbeyxaxmikrbcppvuex.supabase.co/functions/v1/submit-score',
+  fnUrl:  'https://mhcolhmrbxanseftghlq.supabase.co/functions/v1/submit-score',
 
   /** HMAC-SHA256-hemlighet – måste matcha SCORE_HMAC_SECRET i Edge Function */
   secret: 'b08e369325a7aa329c7e3fad24943d8a86b6cf61c603519f736b7f2f95bc8bec',

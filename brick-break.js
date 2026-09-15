@@ -313,9 +313,16 @@ function initHiscores() {
   hiscore  = hiscores[0]?.score || 0;
 
   // Hämta aktuell top-10 från databasen asynkront – uppdaterar utan att blockera spelstart
+  // Accept-Profile krävs eftersom hiscores bor i schemat "brick-break", inte public
   fetch(
     `${SUPABASE_CONFIG.url}/rest/v1/hiscores?select=name,score&order=score.desc&limit=10`,
-    { headers: { apikey: SUPABASE_CONFIG.anon, Authorization: `Bearer ${SUPABASE_CONFIG.anon}` } },
+    {
+      headers: {
+        apikey: SUPABASE_CONFIG.anon,
+        Authorization: `Bearer ${SUPABASE_CONFIG.anon}`,
+        'Accept-Profile': 'brick-break',
+      },
+    },
   )
     .then(r => r.ok ? r.json() : null)
     .then(data => {

@@ -92,7 +92,9 @@ Deno.serve(async (req) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   );
 
+  // hiscores bor i schemat "brick-break", inte public – måste anges explicit
   const { error: insertError } = await supabase
+    .schema('brick-break')
     .from('hiscores')
     .insert({ name: cleanName, score });
 
@@ -103,6 +105,7 @@ Deno.serve(async (req) => {
 
   // ── Returnera uppdaterad top-10 ──────────────────────────────────────────────
   const { data: topScores, error: selectError } = await supabase
+    .schema('brick-break')
     .from('hiscores')
     .select('name, score')
     .order('score', { ascending: false })
