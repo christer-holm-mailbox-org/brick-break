@@ -21,3 +21,6 @@ dist/game.css
 
 # Lokala anteckningar – checkas aldrig in
 .commit-notes.md
+
+# Lokal hemlighet (HMAC-secret) – repot är publikt, får aldrig committas
+config.secrets.js

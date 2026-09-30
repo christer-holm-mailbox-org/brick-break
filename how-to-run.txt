@@ -1,0 +1,82 @@
+BRICK BREAK – SÅ KÖR DU APPLIKATIONEN
+======================================
+
+FÖRUTSÄTTNINGAR
+----------------
+- Node.js installerat (används för npx-verktyg som http-server, esbuild, eslint)
+- En webbläsare
+
+
+1. KÖRA SPELET LOKALT (utvecklingsläge, ingen bygg krävs)
+-----------------------------------------------------------
+Spelet är vanilla JS-moduler och kan köras direkt utan byggsteg.
+
+  npm start
+
+Detta startar en lokal webbserver på http://localhost:3000 och öppnar
+webbläsaren automatiskt. Gå sedan till:
+
+  http://localhost:3000/demo.html
+
+demo.html visar spelet i ett litet flytande fönster som expanderar vid
+klick – detta är standardsättet att testa spelet under utveckling.
+
+
+2. BYGGA EN PRODUKTIONSVERSION
+--------------------------------
+  npm run build
+
+Detta bundlar och minifierar brick-break.js/.css till dist/game.js och
+dist/game.css, samt obfuskerar JS-koden (skyddar bl.a. HMAC-hemligheten
+i config.js från att läsas i klartext).
+
+Kör sedan den byggda versionen:
+
+  npm run serve
+
+Öppnar http://localhost:3000 mot dist/-mappen (dist/index.html finns
+redan där och laddar de byggda filerna).
+
+
+3. LINTA KODEN
+---------------
+  npm run lint
+
+Kör ESLint mot brick-break.js. Görs även automatiskt via GitHub Actions
+vid push/PR mot main.
+
+
+4. DATABAS (SUPABASE)
+-----------------------
+Hiscore-listan hämtas från Supabase. Url/anon-nyckel/fnUrl ligger redan
+i config.js (SUPABASE_CONFIG) och pekar mot det aktiva Supabase-projektet.
+
+HMAC-hemligheten ligger DÄREMOT inte i config.js (repot är publikt på
+GitHub) utan i config.secrets.js, som är gitignorad och måste skapas
+lokalt innan spelet körs:
+
+  1. Kopiera config.secrets.example.js till config.secrets.js
+  2. Ersätt SCORE_HMAC_SECRET-värdet med den riktiga hemligheten
+     (samma värde som är satt server-side i Edge Function-hemligheten
+     SCORE_HMAC_SECRET för det aktiva Supabase-projektet)
+
+Utan config.secrets.js misslyckas poänginlämning (ogiltig token), men
+spelet går fortfarande att spela och topplistan går fortfarande att läsa.
+
+Om Supabase inte går att nå (fel URL/nyckel, projektet pausat, ingen
+nätverksanslutning) faller spelet automatiskt tillbaka på en lokal
+hiscore-lista i sessionStorage, så spelet går fortfarande att spela.
+
+
+5. BÄDDA IN SPELET PÅ EN ANNAN SIDA
+--------------------------------------
+Spelet är en fristående ES-modul utan globala variabler:
+
+  <div id="game"></div>
+  <script type="module">
+    import { BrickBreak } from './brick-break.js';
+    BrickBreak.init('#game');
+  </script>
+
+Valfria inställningar kan skickas som andra argument till init(), se
+DEFAULT_CONFIG i config.js för vilka värden som går att överskrida.
